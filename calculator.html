@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>初级计算器</title>
+    <style>
+      :root {
+        --bg0: #0b1220;
+        --bg1: #111b2e;
+        --panel: rgba(255, 255, 255, 0.06);
+        --border: rgba(255, 255, 255, 0.10);
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --accent: #38bdf8;
+        --ok: #22c55e;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(1200px 600px at 20% 10%, #1b2a4a 0%, transparent 60%),
+          radial-gradient(900px 500px at 80% 40%, #0b3b52 0%, transparent 55%),
+          linear-gradient(180deg, var(--bg0), var(--bg1));
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Microsoft YaHei",
+          "PingFang SC", "Noto Sans CJK SC", sans-serif;
+      }
+
+      .app {
+        width: min(360px, calc(100vw - 24px));
+        border: 1px solid var(--border);
+        background: var(--panel);
+        backdrop-filter: blur(14px);
+        border-radius: 18px;
+        padding: 14px;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+      }
+
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+
+      .title {
+        font-size: 12px;
+        letter-spacing: 0.3px;
+        color: var(--muted);
+      }
+
+      .hint {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .display {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 12px 12px;
+        background: linear-gradient(135deg, rgba(56, 189, 248, 0.12), rgba(255, 255, 255, 0.03));
+        overflow: hidden;
+      }
+
+      .expr {
+        min-height: 18px;
+        font-size: 13px;
+        color: var(--muted);
+        text-align: right;
+        word-break: break-all;
+      }
+
+      .value {
+        margin-top: 4px;
+        font-size: 34px;
+        line-height: 1.15;
+        text-align: right;
+        word-break: break-all;
+      }
+
+      .keys {
+        margin-top: 12px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 9px;
+      }
+
+      button {
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        background: rgba(2, 6, 23, 0.55);
+        color: var(--text);
+        border-radius: 999px;
+        padding: 14px 0;
+        font-size: 16px;
+        cursor: pointer;
+        user-select: none;
+        transition: transform 0.06s ease, background 0.15s ease, border-color 0.15s ease;
+      }
+
+      button:hover {
+        border-color: rgba(255, 255, 255, 0.18);
+        background: rgba(2, 6, 23, 0.68);
+      }
+
+      button:active {
+        transform: translateY(1px);
+      }
+
+      .fn {
+        color: var(--muted);
+        background: rgba(17, 24, 39, 0.65);
+      }
+
+      .op {
+        color: var(--accent);
+        background: rgba(15, 23, 42, 0.70);
+      }
+
+      .eq {
+        background: linear-gradient(135deg, rgba(34, 197, 94, 0.95), rgba(22, 163, 74, 0.90));
+        border-color: rgba(34, 197, 94, 0.35);
+      }
+
+      .eq:hover {
+        background: linear-gradient(135deg, rgba(34, 197, 94, 1), rgba(22, 163, 74, 0.96));
+      }
+
+      .wide {
+        grid-column: span 2;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app" aria-label="初级计算器">
+      <div class="top">
+        <div class="title">初级计算器</div>
+        <div class="hint">键盘：0-9 . + - * / Enter Backspace Esc</div>
+      </div>
+
+      <section class="display" aria-live="polite">
+        <div id="expr" class="expr"></div>
+        <div id="value" class="value">0</div>
+      </section>
+
+      <section class="keys" aria-label="按键区">
+        <button class="fn" data-action="clear">AC</button>
+        <button class="fn" data-action="back">⌫</button>
+        <button class="fn" data-action="sign">±</button>
+        <button class="op" data-op="/">÷</button>
+
+        <button data-digit="7">7</button>
+        <button data-digit="8">8</button>
+        <button data-digit="9">9</button>
+        <button class="op" data-op="*">×</button>
+
+        <button data-digit="4">4</button>
+        <button data-digit="5">5</button>
+        <button data-digit="6">6</button>
+        <button class="op" data-op="-">−</button>
+
+        <button data-digit="1">1</button>
+        <button data-digit="2">2</button>
+        <button data-digit="3">3</button>
+        <button class="op" data-op="+">+</button>
+
+        <button class="wide" data-digit="0">0</button>
+        <button data-digit=".">.</button>
+        <button class="eq" data-action="equal">=</button>
+      </section>
+    </main>
+
+    <script>
+      const exprEl = document.getElementById("expr");
+      const valueEl = document.getElementById("value");
+
+      /** @type {string[]} */
+      let tokens = [];
+      let current = "0";
+      let justEvaluated = false;
+
+      function formatOp(op) {
+        if (op === "*") return "×";
+        if (op === "/") return "÷";
+        return op;
+      }
+
+      function updateUI() {
+        const expr = tokens
+          .map((t) => (t === "+" || t === "-" || t === "*" || t === "/" ? formatOp(t) : t))
+          .join(" ");
+        exprEl.textContent = expr;
+        valueEl.textContent = current || "0";
+      }
+
+      function clearAll() {
+        tokens = [];
+        current = "0";
+        justEvaluated = false;
+        updateUI();
+      }
+
+      function backspace() {
+        if (justEvaluated) {
+          clearAll();
+          return;
+        }
+        if (current.length <= 1) current = "0";
+        else current = current.slice(0, -1);
+        if (current === "-" || current === "") current = "0";
+        updateUI();
+      }
+
+      function toggleSign() {
+        if (current === "0") return;
+        if (current.startsWith("-")) current = current.slice(1);
+        else current = "-" + current;
+        updateUI();
+      }
+
+      function pushNumberIfNeeded() {
+        if (current !== "0" || tokens.length === 0 || (tokens.length > 0 && isOperator(tokens[tokens.length - 1]))) {
+          tokens.push(current);
+        }
+      }
+
+      function isOperator(t) {
+        return t === "+" || t === "-" || t === "*" || t === "/";
+      }
+
+      function inputDigit(d) {
+        if (justEvaluated) {
+          tokens = [];
+          current = "0";
+          justEvaluated = false;
+        }
+
+        if (d === ".") {
+          if (current.includes(".")) return;
+          current = current + ".";
+          updateUI();
+          return;
+        }
+
+        if (current === "0") current = d;
+        else current += d;
+        updateUI();
+      }
+
+      function inputOperator(op) {
+        if (justEvaluated) {
+          tokens = [current];
+          justEvaluated = false;
+        } else {
+          if (tokens.length === 0) {
+            tokens.push(current);
+          } else if (!isOperator(tokens[tokens.length - 1])) {
+            tokens.push(current);
+          }
+        }
+
+        if (isOperator(tokens[tokens.length - 1])) {
+          tokens[tokens.length - 1] = op;
+        } else {
+          tokens.push(op);
+        }
+        current = "0";
+        updateUI();
+      }
+
+      function tokenizeForEval() {
+        const t = [...tokens];
+        if (!isOperator(t[t.length - 1])) t.push(current);
+        if (isOperator(t[t.length - 1])) t.pop();
+        return t;
+      }
+
+      function precedence(op) {
+        return op === "*" || op === "/" ? 2 : 1;
+      }
+
+      function toRPN(toks) {
+        const out = [];
+        const ops = [];
+        for (const tok of toks) {
+          if (isOperator(tok)) {
+            while (ops.length && precedence(ops[ops.length - 1]) >= precedence(tok)) {
+              out.push(ops.pop());
+            }
+            ops.push(tok);
+          } else {
+            out.push(tok);
+          }
+        }
+        while (ops.length) out.push(ops.pop());
+        return out;
+      }
+
+      function evalRPN(rpn) {
+        const st = [];
+        for (const tok of rpn) {
+          if (!isOperator(tok)) {
+            const n = Number(tok);
+            if (!Number.isFinite(n)) return NaN;
+            st.push(n);
+            continue;
+          }
+          const b = st.pop();
+          const a = st.pop();
+          if (typeof a !== "number" || typeof b !== "number") return NaN;
+          if (tok === "+") st.push(a + b);
+          else if (tok === "-") st.push(a - b);
+          else if (tok === "*") st.push(a * b);
+          else if (tok === "/") st.push(a / b);
+        }
+        return st.length === 1 ? st[0] : NaN;
+      }
+
+      function formatNumber(n) {
+        if (!Number.isFinite(n)) return "错误";
+        // 避免 0.30000000004 这种显示问题
+        const fixed = Number(n.toFixed(12));
+        return String(fixed);
+      }
+
+      function equal() {
+        const toks = tokenizeForEval();
+        if (toks.length === 0) return;
+        const rpn = toRPN(toks);
+        const val = evalRPN(rpn);
+        current = formatNumber(val);
+        tokens = toks;
+        justEvaluated = true;
+        updateUI();
+      }
+
+      document.querySelector(".keys").addEventListener("click", (e) => {
+        const btn = e.target.closest("button");
+        if (!btn) return;
+
+        const digit = btn.getAttribute("data-digit");
+        const op = btn.getAttribute("data-op");
+        const action = btn.getAttribute("data-action");
+
+        if (digit !== null) return inputDigit(digit);
+        if (op !== null) return inputOperator(op);
+        if (action === "clear") return clearAll();
+        if (action === "back") return backspace();
+        if (action === "sign") return toggleSign();
+        if (action === "equal") return equal();
+      });
+
+      window.addEventListener("keydown", (e) => {
+        const k = e.key;
+        if ((k >= "0" && k <= "9") || k === ".") {
+          e.preventDefault();
+          inputDigit(k);
+          return;
+        }
+        if (k === "+" || k === "-" || k === "*" || k === "/") {
+          e.preventDefault();
+          inputOperator(k);
+          return;
+        }
+        if (k === "Enter" || k === "=") {
+          e.preventDefault();
+          equal();
+          return;
+        }
+        if (k === "Backspace") {
+          e.preventDefault();
+          backspace();
+          return;
+        }
+        if (k === "Escape") {
+          e.preventDefault();
+          clearAll();
+        }
+      });
+
+      updateUI();
+    </script>
+  </body>
+</html>
